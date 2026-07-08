@@ -1,0 +1,39 @@
+name: 'dbt_rabbit_samples'
+version: '1.0.0'
+config-version: 2
+
+profile: 'dbt_rabbit_samples'
+
+model-paths: ['models']
+analysis-paths: ['analyses']
+test-paths: ['tests']
+seed-paths: ['seeds']
+macro-paths: ['macros']
+snapshot-paths: ['snapshots']
+
+target-path: 'target'
+clean-targets:
+  - 'target'
+  - 'dbt_packages'
+  - 'logs'
+
+models:
+  dbt_rabbit_samples:
+    bikeshare:
+      staging:
+        +schema: staging
+        +materialized: table
+        +tags: ['bikeshare', 'staging']
+      marts:
+        +schema: marts
+        +materialized: table
+        +tags: ['bikeshare', 'marts']
+    bitcoin_cash:
+      staging:
+        +schema: staging
+        +materialized: table
+        +tags: ['bitcoin_cash', 'staging']
+      marts:
+        +schema: marts
+        +materialized: table
+        +tags: ['bitcoin_cash', 'marts']

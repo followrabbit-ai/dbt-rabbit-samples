@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: crypto_bitcoin_cash
+    description: >
+      Bitcoin Cash blockchain transactions from BigQuery public data.
+      https://console.cloud.google.com/marketplace/product/google-cloud-public-datasets/crypto-bitcoin-cash
+    database: bigquery-public-data
+    schema: crypto_bitcoin_cash
+    tables:
+      - name: transactions
+        description: Bitcoin Cash transaction records (large, partitioned table).

@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: mart_daily_bch_transactions
+    description: Daily Bitcoin Cash transaction aggregates for the last 30 days of source data.
+    columns:
+      - name: tx_date
+        description: Calendar date of transactions.
+        tests:
+          - not_null
+          - unique

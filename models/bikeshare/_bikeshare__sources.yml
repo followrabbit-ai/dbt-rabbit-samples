@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: austin_bikeshare
+    description: >
+      Austin bikeshare trips from BigQuery public data.
+      https://console.cloud.google.com/marketplace/product/city-of-austin/austin-bikeshare
+    database: bigquery-public-data
+    schema: austin_bikeshare
+    tables:
+      - name: bikeshare_trips
+        description: Individual bikeshare trip records.

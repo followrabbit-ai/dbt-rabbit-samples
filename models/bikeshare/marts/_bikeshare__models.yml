@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: mart_daily_rides
+    description: Daily bikeshare ride aggregates for the last 30 days of source data.
+    columns:
+      - name: ride_date
+        description: Calendar date of rides.
+        tests:
+          - not_null
+          - unique

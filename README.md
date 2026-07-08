@@ -112,12 +112,12 @@ Unit tests mock upstream `source()` / `ref()` inputs so transform logic is verif
 
 ## CI/CD
 
-Pull requests run lint/parse checks. Merges to `master` go through [release-please](https://github.com/googleapis/release-please); a new GitHub Release triggers deployment to a **Cloud Run Job** that runs `dbt build`.
+Pull requests run lint/parse checks. Merges to `main` go through [release-please](https://github.com/googleapis/release-please); a new GitHub Release triggers deployment to a **Cloud Run Job** that runs `dbt build`.
 
 ```mermaid
 flowchart LR
   PR[Pull_request] --> Validate[validate.yml]
-  Merge[Merge_to_master] --> ReleasePlease[release-please_job]
+  Merge[Merge_to_main] --> ReleasePlease[release-please_job]
   ReleasePlease -->|release_created| Deploy[deploy_cloud_run_job]
   Manual[workflow_dispatch] --> Deploy
 ```
@@ -125,13 +125,13 @@ flowchart LR
 | Step | What happens |
 | --- | --- |
 | **Pull request** | [`validate.yml`](.github/workflows/validate.yml) runs `dbt parse` + SQLFluff on source models (no GCP credentials) |
-| **Merge to master** | release-please opens/updates a release PR (version + changelog) |
+| **Merge to main** | release-please opens/updates a release PR (version + changelog) |
 | **Release merged** | Tag created → [`release.yml`](.github/workflows/release.yml) builds image and updates Cloud Run Job |
 | **Manual** | `workflow_dispatch` on Release workflow redeploys without a new version |
 
 ### How releases work
 
-1. Every push to `master` runs release-please, which opens or updates a Release PR from [Conventional Commits](https://www.conventionalcommits.org/) (`feat:` → minor, `fix:` → patch, breaking change → major).
+1. Every push to `main` runs release-please, which opens or updates a Release PR from [Conventional Commits](https://www.conventionalcommits.org/) (`feat:` → minor, `fix:` → patch, breaking change → major).
 2. Merging the Release PR creates a GitHub Release + tag and triggers the deploy job.
 3. The deploy job builds a container image, pushes to Artifact Registry, and updates the Cloud Run Job. **No schedule** — run the job manually when you want a build:
 

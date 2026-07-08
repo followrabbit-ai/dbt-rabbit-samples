@@ -9,7 +9,7 @@ Two independent pipelines run against BigQuery public datasets:
 | **Bikeshare** | `bigquery-public-data.austin_bikeshare.bikeshare_trips` | `stg_bikeshare_trips` | `mart_daily_rides` |
 | **Bitcoin Cash** | `bigquery-public-data.crypto_bitcoin_cash.transactions` | `stg_bch_transactions` | `mart_daily_bch_transactions` |
 
-Each pipeline loads a rolling 30-day window into staging, then aggregates to a daily mart. The Airflow demos also export marts to GCS as Parquet — that step is intentionally omitted here and can be added as orchestration after `dbt run`.
+Each pipeline loads a rolling 30-day window into staging, then aggregates to a daily mart. The Airflow demos also export marts to GCS as Parquet — that step is intentionally omitted here and can be added as orchestration after `dbt build`.
 
 ## Prerequisites
 
@@ -72,26 +72,41 @@ export GCP_LOCATION=US           # optional, this is the default
 dbt debug
 ```
 
-## Running models
+## Running the project
+
+`dbt build` runs models and tests in dependency order — schema and unit tests execute after each model builds.
 
 Run both pipelines:
 
 ```bash
-dbt run
+dbt build
 ```
 
 Run a single pipeline:
 
 ```bash
-dbt run --select bikeshare
-dbt run --select bitcoin_cash
+dbt build --select bikeshare
+dbt build --select bitcoin_cash
 ```
 
-Run tests:
+## Development
+
+Install linting dependencies (in addition to the main requirements):
 
 ```bash
-dbt test
+uv pip install -r requirements-dev.txt
 ```
+
+Validate the project locally:
+
+```bash
+export GCP_PROJECT=your-project-id   # required for dbt parse/build profile resolution
+dbt parse
+sqlfluff lint models/
+dbt build                            # runs models + schema/unit tests (requires BigQuery)
+```
+
+Unit tests mock upstream `source()` / `ref()` inputs so transform logic is verified without scanning public datasets.
 
 ## Project layout
 
@@ -115,8 +130,8 @@ Models land in BigQuery under schema suffixes:
 Phases 2–4 build a mature repo (quality gates, deployment, export) before Phase 5, so Rabbit Pricing Model Optimization can be demonstrated as a minimal add-on to an existing project.
 
 1. **Phase 1 (complete)** — Generic dbt project with standard `dbt-bigquery` adapter
-2. **Phase 2 (next)** — Tests and linting (local SQLFluff + expanded dbt tests)
-3. **Phase 3** — CI/CD and deployment via **Cloud Run Job**
+2. **Phase 2 (complete)** — Tests and linting (local SQLFluff + expanded dbt schema and unit tests)
+3. **Phase 3 (next)** — CI/CD and deployment via **Cloud Run Job**
 4. **Phase 4** — GCS Parquet export via BigQuery `EXPORT DATA` post-hooks on mart models
 5. **Phase 5** — Rabbit Pricing Model Optimization via [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt)
 

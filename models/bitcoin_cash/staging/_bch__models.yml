@@ -1,0 +1,72 @@
+version: 2
+
+models:
+  - name: stg_bch_transactions
+    description: Last 30 days of Bitcoin Cash transactions with partition pruning.
+    columns:
+      - name: hash
+        description: Transaction hash.
+        quote: true
+        tests:
+          - not_null
+          - unique
+
+unit_tests:
+  - name: test_stg_bch_transactions_rolling_30_day_window
+    description: Keeps rows within 30 days of the source max block_timestamp.
+    model: stg_bch_transactions
+    given:
+      - input: source('crypto_bitcoin_cash', 'transactions')
+        rows:
+          - {
+              hash: 'aaa',
+              size: 100,
+              virtual_size: 90,
+              version: 1,
+              block_number: 1,
+              block_hash: 'block-a',
+              block_timestamp: '2026-06-30 10:00:00 UTC',
+              block_timestamp_month: '2026-06-01',
+              input_count: 1,
+              output_count: 2,
+              input_value: 100,
+              output_value: 90,
+              is_coinbase: false,
+              fee: 1,
+            }
+          - {
+              hash: 'bbb',
+              size: 100,
+              virtual_size: 90,
+              version: 1,
+              block_number: 2,
+              block_hash: 'block-b',
+              block_timestamp: '2026-06-01 10:00:00 UTC',
+              block_timestamp_month: '2026-06-01',
+              input_count: 1,
+              output_count: 2,
+              input_value: 50,
+              output_value: 45,
+              is_coinbase: true,
+              fee: 1,
+            }
+          - {
+              hash: 'ccc',
+              size: 100,
+              virtual_size: 90,
+              version: 1,
+              block_number: 3,
+              block_hash: 'block-c',
+              block_timestamp: '2026-05-01 10:00:00 UTC',
+              block_timestamp_month: '2026-05-01',
+              input_count: 1,
+              output_count: 2,
+              input_value: 25,
+              output_value: 20,
+              is_coinbase: false,
+              fee: 1,
+            }
+    expect:
+      rows:
+        - {hash: 'aaa'}
+        - {hash: 'bbb'}

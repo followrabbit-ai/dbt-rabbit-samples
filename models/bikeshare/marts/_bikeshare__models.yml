@@ -9,3 +9,40 @@ models:
         tests:
           - not_null
           - unique
+
+unit_tests:
+  - name: test_mart_daily_rides_aggregates_by_day
+    description: Aggregates rides, average duration, and unique bikes per day.
+    model: mart_daily_rides
+    given:
+      - input: ref('stg_bikeshare_trips')
+        rows:
+          - {
+              start_time: '2024-06-01 10:00:00 UTC',
+              duration_minutes: 10,
+              bike_id: 1,
+            }
+          - {
+              start_time: '2024-06-01 11:00:00 UTC',
+              duration_minutes: 20,
+              bike_id: 2,
+            }
+          - {
+              start_time: '2024-06-02 09:00:00 UTC',
+              duration_minutes: 30,
+              bike_id: 1,
+            }
+    expect:
+      rows:
+        - {
+            ride_date: '2024-06-01',
+            rides: 2,
+            avg_duration_minutes: 15,
+            unique_bikes: 2,
+          }
+        - {
+            ride_date: '2024-06-02',
+            rides: 1,
+            avg_duration_minutes: 30,
+            unique_bikes: 1,
+          }

@@ -9,3 +9,35 @@ models:
         tests:
           - not_null
           - unique
+
+unit_tests:
+  - name: test_mart_daily_bch_transactions_aggregates_by_day
+    description: Aggregates daily transaction counts and value totals.
+    model: mart_daily_bch_transactions
+    given:
+      - input: ref('stg_bch_transactions')
+        rows:
+          - {
+              block_timestamp: '2024-06-01 10:00:00 UTC',
+              input_value: 100,
+              output_value: 90,
+              output_count: 2,
+              is_coinbase: false,
+            }
+          - {
+              block_timestamp: '2024-06-01 11:00:00 UTC',
+              input_value: 50,
+              output_value: 45,
+              output_count: 1,
+              is_coinbase: true,
+            }
+    expect:
+      rows:
+        - {
+            tx_date: '2024-06-01',
+            tx_count: 2,
+            total_input_value: 150,
+            total_output_value: 135,
+            avg_output_count: 1.5,
+            coinbase_tx_count: 1,
+          }

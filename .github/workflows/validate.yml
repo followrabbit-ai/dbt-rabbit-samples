@@ -1,0 +1,60 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: dbt parse + sqlfluff
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT: ci-dummy-project
+      GCP_DATASET: dbt_demo
+      GCP_LOCATION: US
+      DBT_PROFILES_DIR: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements.txt
+            requirements-dev.txt
+          python-version: "3.11"
+          activate-environment: true
+
+      - name: Install dependencies
+        run: |
+          uv pip install -r requirements.txt
+          uv pip install -r requirements-dev.txt
+
+      - name: Write CI profile
+        run: |
+          cat > profiles.yml <<'PROFILE'
+          dbt_rabbit_samples:
+            target: dev
+            outputs:
+              dev:
+                type: bigquery
+                method: oauth
+                project: "{{ env_var('GCP_PROJECT') }}"
+                dataset: "{{ env_var('GCP_DATASET', 'dbt_demo') }}"
+                location: "{{ env_var('GCP_LOCATION', 'US') }}"
+                threads: 4
+          PROFILE
+
+      - name: dbt parse
+        run: dbt parse
+
+      - name: sqlfluff lint
+        run: sqlfluff lint --config .sqlfluff.ci models/

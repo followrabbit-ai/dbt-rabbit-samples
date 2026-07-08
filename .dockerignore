@@ -1,0 +1,12 @@
+.git
+.github
+dbt-rabbit/
+target/
+dbt_packages/
+logs/
+dbt_internal_packages/
+profiles.yml
+.user.yml
+.env
+*.md
+!profiles.docker.yml

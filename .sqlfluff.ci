@@ -1,10 +1,17 @@
 [sqlfluff]
 dialect = bigquery
-templater = raw
+templater = jinja
 max_line_length = 120
-# Compiled SQL is produced by dbt macro expansion; layout rules on source
-# models are enforced locally via the dbt templater and .sqlfluff.
-exclude_rules = structure.using, structure.column_order, layout
+exclude_rules = structure.using, structure.column_order
+
+[sqlfluff:indentation]
+indented_joins = false
+indented_using_on = true
+tab_space_size = 4
+
+[sqlfluff:layout:type:comma]
+spacing_before = touch
+line_position = trailing
 
 [sqlfluff:rules:capitalisation.keywords]
 capitalisation_policy = lower
@@ -17,3 +24,7 @@ aliasing = explicit
 
 [sqlfluff:rules:aliasing.column]
 aliasing = explicit
+
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True
+load_macros_from_path = macros

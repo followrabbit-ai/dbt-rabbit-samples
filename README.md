@@ -112,7 +112,7 @@ Unit tests mock upstream `source()` / `ref()` inputs so transform logic is verif
 
 ## CI/CD
 
-Pull requests run lint/parse checks. Merges to `main` go through [release-please](https://github.com/googleapis/release-please); a new GitHub Release triggers deployment to a **Cloud Run Job** that runs `dbt build`.
+Pull requests run lint/parse checks. Merges to `main` go through [release-please](https://github.com/googleapis/release-please); a new GitHub Release triggers deployment to a **Cloud Run Job** that runs `dbt build --target prod --exclude resource_type:unit_test` (models + schema tests; unit tests run locally only).
 
 ```mermaid
 flowchart LR
@@ -133,7 +133,7 @@ flowchart LR
 
 1. Every push to `main` runs release-please, which opens or updates a Release PR from [Conventional Commits](https://www.conventionalcommits.org/) (`feat:` → minor, `fix:` → patch, breaking change → major).
 2. Merging the Release PR creates a GitHub Release + tag and triggers the deploy job.
-3. The deploy job builds a container image, pushes to Artifact Registry, and updates the Cloud Run Job. **No schedule** — run the job manually when you want a build:
+3. The deploy job builds a container image, pushes to Artifact Registry, and updates the Cloud Run Job. The image entrypoint is `dbt build --target prod --exclude resource_type:unit_test` so prod runs models and schema tests but not unit tests. **No schedule** — run the job manually when you want a build:
 
 ```bash
 gcloud run jobs execute dbt-rabbit-samples \

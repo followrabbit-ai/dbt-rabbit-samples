@@ -15,4 +15,4 @@ COPY macros/ macros/
 ENV DBT_PROFILES_DIR=/app
 ENV DBT_TARGET=prod
 
-ENTRYPOINT ["dbt", "build", "--target", "prod"]
+ENTRYPOINT ["dbt", "build", "--target", "prod", "--exclude", "resource_type:unit_test"]

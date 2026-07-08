@@ -9,7 +9,7 @@ Two independent pipelines run against BigQuery public datasets:
 | **Bikeshare** | `bigquery-public-data.austin_bikeshare.bikeshare_trips` | `stg_bikeshare_trips` | `mart_daily_rides` |
 | **Bitcoin Cash** | `bigquery-public-data.crypto_bitcoin_cash.transactions` | `stg_bch_transactions` | `mart_daily_bch_transactions` |
 
-Each pipeline loads a rolling 30-day window into staging, then aggregates to a daily mart. The Airflow demos also export marts to GCS as Parquet — that step is intentionally omitted here and can be added as orchestration after `dbt build`.
+Each pipeline loads a rolling 30-day window into staging, then aggregates to a daily mart. The Airflow demos also export marts to GCS as Parquet — that step is out of scope for this repo; the focus is dbt modeling and Rabbit Pricing Model Optimization.
 
 ## Prerequisites
 
@@ -182,13 +182,12 @@ Models land in BigQuery under schema suffixes:
 
 ## Roadmap
 
-Phases 2–4 build a mature repo (quality gates, deployment, export) before Phase 5, so Rabbit Pricing Model Optimization can be demonstrated as a minimal add-on to an existing project.
+Phases 1–3 build a mature dbt repo (quality gates, deployment). Phase 4 demonstrates Rabbit Pricing Model Optimization as a minimal add-on to an existing project.
 
 1. **Phase 1 (complete)** — Generic dbt project with standard `dbt-bigquery` adapter
 2. **Phase 2 (complete)** — Tests and linting (local SQLFluff + expanded dbt schema and unit tests)
 3. **Phase 3 (complete)** — CI/CD and deployment via **Cloud Run Job**
-4. **Phase 4 (next)** — GCS Parquet export via BigQuery `EXPORT DATA` post-hooks on mart models
-5. **Phase 5** — Rabbit Pricing Model Optimization via [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt)
+4. **Phase 4 (next)** — Rabbit Pricing Model Optimization via [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt)
 
 ## License
 

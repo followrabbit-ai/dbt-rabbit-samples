@@ -38,16 +38,16 @@ bq --location=US mk --dataset "${GCP_PROJECT}:dbt_demo"
 **pip:**
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv dbt-rabbit
+source dbt-rabbit/bin/activate
 pip install -r requirements.txt
 ```
 
 **uv:**
 
 ```bash
-uv venv
-source .venv/bin/activate
+uv venv dbt-rabbit
+source dbt-rabbit/bin/activate
 uv pip install -r requirements.txt
 ```
 

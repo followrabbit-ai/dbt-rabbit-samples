@@ -161,7 +161,6 @@ The deploy service account typically needs `roles/artifactregistry.writer`, `rol
 
 WIF pool/provider setup is provisioned outside this repo (same pattern as [rabbit-sample-dags](https://github.com/followrabbit-ai/rabbit-sample-dags)).
 
-
 ## Project layout
 
 ```

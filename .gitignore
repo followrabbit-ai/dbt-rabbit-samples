@@ -1,7 +1,7 @@
 target/
 dbt_packages/
 logs/
-.venv/
+dbt-rabbit/
 .env
 profiles.yml
 .user.yml

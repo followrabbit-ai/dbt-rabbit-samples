@@ -13,16 +13,17 @@ Each pipeline loads a rolling 30-day window into staging, then aggregates to a d
 
 ## Prerequisites
 
-1. **Python 3.10+**
-2. **Google Cloud project** with BigQuery enabled
-3. **Authentication** — run once:
+1. **[uv](https://docs.astral.sh/uv/getting-started/installation/)** — Python package and environment manager
+2. **Python 3.10+** (uv will install one if needed)
+3. **Google Cloud project** with BigQuery enabled
+4. **Authentication** — for local dev with `method: oauth` in the profile, set up Application Default Credentials:
    ```bash
    gcloud auth application-default login
    ```
-4. **BigQuery IAM** on your project:
+5. **BigQuery IAM** on your project:
    - `roles/bigquery.jobUser` (project level)
    - `roles/bigquery.dataEditor` on the target dataset
-5. **Public data access** — `roles/bigquery.dataViewer` on `bigquery-public-data` is granted by default.
+6. **Public data access** — `roles/bigquery.dataViewer` on `bigquery-public-data` is granted by default.
 
 Create the base dataset (dbt creates `dbt_demo_staging` and `dbt_demo_marts` automatically on first run):
 
@@ -35,19 +36,9 @@ bq --location=US mk --dataset "${GCP_PROJECT}:dbt_demo"
 
 ### 1. Virtual environment
 
-**pip:**
-
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-**uv:**
-
-```bash
-uv venv
-source .venv/bin/activate
+uv venv dbt-rabbit
+source dbt-rabbit/bin/activate
 uv pip install -r requirements.txt
 ```
 

@@ -112,10 +112,13 @@ Models land in BigQuery under schema suffixes:
 
 ## Roadmap
 
-1. **Phase 1 (current)** — Generic dbt project with standard `dbt-bigquery` adapter
-2. **Phase 2** — Rabbit Pricing Model Optimization via [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt)
-3. **Phase 3** — CI/CD and GCP deployment
-4. **Phase 4** — GCS Parquet export (post-`dbt run` orchestration)
+Phases 2–4 build a mature repo (quality gates, deployment, export) before Phase 5, so Rabbit Pricing Model Optimization can be demonstrated as a minimal add-on to an existing project.
+
+1. **Phase 1 (complete)** — Generic dbt project with standard `dbt-bigquery` adapter
+2. **Phase 2 (next)** — Tests and linting (local SQLFluff + expanded dbt tests)
+3. **Phase 3** — CI/CD and deployment via **Cloud Run Job**
+4. **Phase 4** — GCS Parquet export via BigQuery `EXPORT DATA` post-hooks on mart models
+5. **Phase 5** — Rabbit Pricing Model Optimization via [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt)
 
 ## License
 

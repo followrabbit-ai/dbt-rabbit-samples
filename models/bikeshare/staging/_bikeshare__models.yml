@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: stg_bikeshare_trips
+    description: Last 30 days of bikeshare trips from the public Austin dataset.
+    columns:
+      - name: trip_id
+        description: Unique trip identifier.
+        tests:
+          - not_null
+          - unique
+
+unit_tests:
+  - name: test_stg_bikeshare_trips_rolling_30_day_window
+    description: Keeps rows within 30 days of the source max start_time.
+    model: stg_bikeshare_trips
+    given:
+      - input: source('austin_bikeshare', 'bikeshare_trips')
+        rows:
+          - {
+              trip_id: 1,
+              subscriber_type: Subscriber,
+              bike_id: 10,
+              start_time: '2024-06-30 10:00:00 UTC',
+              duration_minutes: 5,
+              start_station_id: 1,
+              start_station_name: 'Station A',
+              end_station_id: 2,
+              end_station_name: 'Station B',
+            }
+          - {
+              trip_id: 2,
+              subscriber_type: Subscriber,
+              bike_id: 11,
+              start_time: '2024-06-01 10:00:00 UTC',
+              duration_minutes: 8,
+              start_station_id: 1,
+              start_station_name: 'Station A',
+              end_station_id: 2,
+              end_station_name: 'Station B',
+            }
+          - {
+              trip_id: 3,
+              subscriber_type: Subscriber,
+              bike_id: 12,
+              start_time: '2024-05-01 10:00:00 UTC',
+              duration_minutes: 12,
+              start_station_id: 1,
+              start_station_name: 'Station A',
+              end_station_id: 2,
+              end_station_name: 'Station B',
+            }
+    expect:
+      rows:
+        - {trip_id: 1}
+        - {trip_id: 2}

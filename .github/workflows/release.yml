@@ -1,0 +1,153 @@
+name: Release & Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release-please
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  deploy:
+    name: deploy-cloud-run-job
+    needs: release-please
+    if: |
+      always() &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        needs.release-please.outputs.release_created == 'true'
+      )
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+      AR_REPO_NAME: ${{ vars.AR_REPO_NAME || 'dbt-rabbit-samples' }}
+      CLOUD_RUN_JOB_NAME: ${{ vars.CLOUD_RUN_JOB_NAME || 'dbt-rabbit-samples' }}
+      GCP_DATASET: ${{ vars.GCP_DATASET || 'dbt_demo' }}
+      GCP_LOCATION: ${{ vars.GCP_LOCATION || 'US' }}
+      GCP_RUNTIME_SA: ${{ vars.GCP_RUNTIME_SA }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'push' && needs.release-please.outputs.tag_name || github.ref }}
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || jq -r '.["."]' .release-please-manifest.json)
+            if [[ "$TAG" != v* ]]; then
+              TAG="v${TAG}"
+            fi
+          else
+            TAG="${{ needs.release-please.outputs.tag_name }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Image tag: ${TAG}"
+
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Ensure Artifact Registry repository exists
+        run: |
+          set -euo pipefail
+          if ! gcloud artifacts repositories describe "${AR_REPO_NAME}" \
+            --location="${GCP_REGION}" \
+            --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+            echo "Creating Artifact Registry repository ${AR_REPO_NAME}..."
+            gcloud artifacts repositories create "${AR_REPO_NAME}" \
+              --repository-format=docker \
+              --location="${GCP_REGION}" \
+              --project="${GCP_PROJECT_ID}" \
+              --description="dbt-rabbit-samples container images"
+          fi
+
+      - name: Build and push container image
+        env:
+          IMAGE: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO_NAME }}/dbt-rabbit-samples:${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          docker build -t "${IMAGE}" .
+          docker push "${IMAGE}"
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+
+      - name: Deploy Cloud Run Job
+        run: |
+          set -euo pipefail
+          DEPLOY_ARGS=(
+            "${CLOUD_RUN_JOB_NAME}"
+            --image="${IMAGE}"
+            --region="${GCP_REGION}"
+            --project="${GCP_PROJECT_ID}"
+            --set-env-vars="GCP_PROJECT=${GCP_PROJECT_ID},GCP_DATASET=${GCP_DATASET},GCP_LOCATION=${GCP_LOCATION}"
+            --max-retries=0
+            --task-timeout=3600
+            --memory=1Gi
+            --cpu=1
+          )
+          if [[ -n "${GCP_RUNTIME_SA}" ]]; then
+            DEPLOY_ARGS+=(--service-account="${GCP_RUNTIME_SA}")
+          fi
+          gcloud run jobs deploy "${DEPLOY_ARGS[@]}"
+
+      - name: Summarize deploy
+        if: always()
+        run: |
+          {
+            echo "### Cloud Run Job deploy"
+            echo
+            echo "- Job: \`${CLOUD_RUN_JOB_NAME}\` (\`${GCP_REGION}\`)"
+            echo "- Project: \`${GCP_PROJECT_ID}\`"
+            echo "- Image: \`${IMAGE}\`"
+            echo "- Deploy service account: \`${{ vars.GCP_DEPLOY_SA }}\`"
+            if [[ -n "${GCP_RUNTIME_SA}" ]]; then
+              echo "- Runtime service account: \`${GCP_RUNTIME_SA}\`"
+            fi
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              echo "- Trigger: manual (workflow_dispatch)"
+            else
+              echo "- Trigger: release \`${{ needs.release-please.outputs.tag_name }}\`"
+            fi
+            echo
+            echo "Run manually:"
+            echo "\`gcloud run jobs execute ${CLOUD_RUN_JOB_NAME} --region=${GCP_REGION} --project=${GCP_PROJECT_ID}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

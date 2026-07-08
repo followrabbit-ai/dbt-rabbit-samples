@@ -1,0 +1,12 @@
+dbt_rabbit_samples:
+  target: prod
+  outputs:
+    prod:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT') }}"
+      dataset: "{{ env_var('GCP_DATASET', 'dbt_demo') }}"
+      location: "{{ env_var('GCP_LOCATION', 'US') }}"
+      threads: 4
+      job_retries: 1
+      timeout_seconds: 3600

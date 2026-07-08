@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   validate:
-    name: dbt parse + sqlfluff
+    name: dbt compile + sqlfluff
     runs-on: ubuntu-latest
     env:
       GCP_PROJECT: ci-dummy-project
@@ -53,8 +53,11 @@ jobs:
                 threads: 4
           PROFILE
 
-      - name: dbt parse
-        run: dbt parse
+      - name: dbt compile
+        run: dbt compile
 
-      - name: sqlfluff lint
-        run: sqlfluff lint models/
+      - name: sqlfluff lint compiled models
+        run: |
+          sqlfluff lint --config .sqlfluff.ci --disregard-sqlfluffignores \
+            target/compiled/dbt_rabbit_samples/models/*/staging/stg_*.sql \
+            target/compiled/dbt_rabbit_samples/models/*/marts/mart_*.sql

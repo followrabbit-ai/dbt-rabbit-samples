@@ -102,9 +102,11 @@ Validate the project locally:
 ```bash
 export GCP_PROJECT=your-project-id   # required for dbt parse/build profile resolution
 dbt parse
-sqlfluff lint models/
+sqlfluff lint models/                # dbt templater; requires ADC for BigQuery adapter init
 dbt build                            # runs models + schema/unit tests (requires BigQuery)
 ```
+
+CI linting uses a credential-free path: `dbt compile` then SQLFluff on `target/compiled/` model SQL via [`.sqlfluff.ci`](.sqlfluff.ci) (`templater = raw`). Layout rules are enforced locally against source models; CI checks compiled SQL for dialect/aliasing/capitalisation only.
 
 Unit tests mock upstream `source()` / `ref()` inputs so transform logic is verified without scanning public datasets.
 
@@ -122,7 +124,7 @@ flowchart LR
 
 | Step | What happens |
 | --- | --- |
-| **Pull request** | [`validate.yml`](.github/workflows/validate.yml) runs `dbt parse` + `sqlfluff lint` (no GCP credentials) |
+| **Pull request** | [`validate.yml`](.github/workflows/validate.yml) runs `dbt compile` + SQLFluff on compiled model SQL (no GCP credentials) |
 | **Merge to master** | release-please opens/updates a release PR (version + changelog) |
 | **Release merged** | Tag created → [`release.yml`](.github/workflows/release.yml) builds image and updates Cloud Run Job |
 | **Manual** | `workflow_dispatch` on Release workflow redeploys without a new version |

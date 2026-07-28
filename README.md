@@ -133,7 +133,7 @@ flowchart LR
 
 1. Every push to `main` runs release-please, which opens or updates a Release PR from [Conventional Commits](https://www.conventionalcommits.org/) (`feat:` → minor, `fix:` → patch, breaking change → major).
 2. Merging the Release PR creates a GitHub Release + tag and triggers the deploy job.
-3. The deploy job builds a container image, pushes to Artifact Registry, and updates the Cloud Run Job. The image entrypoint is `dbt build --target prod --exclude resource_type:unit_test` so prod runs models and schema tests but not unit tests. **No schedule** — run the job manually when you want a build:
+3. The deploy job ensures the Cloud Run Job's runtime service account exists (creating it and granting BigQuery access on first run if needed), builds a container image, pushes it to the shared `followrabbit-ai-public/images` Artifact Registry repo (Terraform-managed, not per-project), and updates the Cloud Run Job. The image entrypoint is `dbt build --target prod --exclude resource_type:unit_test` so prod runs models and schema tests but not unit tests. **No schedule** — run the job manually when you want a build:
 
 ```bash
 gcloud run jobs execute dbt-rabbit-samples \
@@ -147,19 +147,19 @@ Settings → Secrets and variables → Actions → Variables (and a `production`
 
 | Name | Purpose | Example |
 | --- | --- | --- |
-| `GCP_PROJECT_ID` | Target GCP project | `rbt-sandbox-stewart` |
+| `GCP_PROJECT_ID` | Target GCP project (Cloud Run Job + BigQuery) | `rbt-sandbox-stewart` |
 | `GCP_WIF_PROVIDER` | Workload Identity Federation provider | `projects/…/providers/…` |
-| `GCP_DEPLOY_SA` | Deploy service account (build/push/update job) | `deploy-sa@….iam.gserviceaccount.com` |
-| `GCP_RUNTIME_SA` | Service account the Cloud Run Job runs as (BigQuery access) | `dbt-job-sa@….iam.gserviceaccount.com` |
-| `GCP_REGION` | Artifact Registry + Cloud Run region (optional) | `us-central1` |
+| `GCP_DEPLOY_SA` | Deploy service account (build/push/update job), provisioned by the foundation team's Terraform, not this repo | `dbt-rabbit-samples-pub@followrabbit-ai-public.iam.gserviceaccount.com` |
+| `GCP_RUNTIME_SA` | Service account the Cloud Run Job runs as (BigQuery access) — created automatically by the deploy job on first run if missing | `dbt-rabbit-samples-runtime@….iam.gserviceaccount.com` |
+| `GCP_REGION` | Cloud Run region (optional) | `us-central1` |
+| `GCP_REGISTRY_PROJECT_ID` | Project hosting the shared `images` Artifact Registry repo (optional) | `followrabbit-ai-public` |
 | `GCP_DATASET` | BigQuery dataset base name (optional) | `dbt_demo` |
 | `GCP_LOCATION` | BigQuery location (optional) | `US` |
-| `AR_REPO_NAME` | Artifact Registry repo name (optional) | `dbt-rabbit-samples` |
 | `CLOUD_RUN_JOB_NAME` | Cloud Run Job name (optional) | `dbt-rabbit-samples` |
 
 PR validation does **not** need these variables. Deploy runs only after a release (or manual workflow dispatch).
 
-The deploy service account typically needs `roles/artifactregistry.writer`, `roles/run.admin` (or `run.developer`), and `roles/iam.serviceAccountUser` on the runtime SA. The runtime SA needs `roles/bigquery.jobUser` and `roles/bigquery.dataEditor` on the target dataset.
+Images are pushed to the shared, Terraform-managed `us-docker.pkg.dev/${GCP_REGISTRY_PROJECT_ID}/images/dbt-rabbit-samples` registry — not a per-project repo, and the deploy SA has no rights to create Artifact Registry repos (by design; see `dbt-rabbit-samples-pub` in the foundation repo). The deploy SA holds `roles/artifactregistry.writer` (scoped to that shared repo's `us` mirror), `roles/run.developer`, and `roles/iam.serviceAccountAdmin` + `roles/resourcemanager.projectIamAdmin` on `GCP_PROJECT_ID` — the latter two so the deploy job can create/manage the runtime SA itself, which is what the "Ensure runtime SA exists" step does. The runtime SA is granted `roles/bigquery.jobUser` and `roles/bigquery.dataEditor` at the project level.
 
 WIF pool/provider setup is provisioned outside this repo (same pattern as [rabbit-sample-dags](https://github.com/followrabbit-ai/rabbit-sample-dags)).
 

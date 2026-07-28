@@ -47,7 +47,7 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
-      AR_REPO_NAME: ${{ vars.AR_REPO_NAME || 'dbt-rabbit-samples' }}
+      GCP_REGISTRY_PROJECT_ID: ${{ vars.GCP_REGISTRY_PROJECT_ID || 'followrabbit-ai-public' }}
       CLOUD_RUN_JOB_NAME: ${{ vars.CLOUD_RUN_JOB_NAME || 'dbt-rabbit-samples' }}
       GCP_DATASET: ${{ vars.GCP_DATASET || 'dbt_demo' }}
       GCP_LOCATION: ${{ vars.GCP_LOCATION || 'US' }}
@@ -85,25 +85,29 @@ jobs:
           project_id: ${{ vars.GCP_PROJECT_ID }}
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+        run: gcloud auth configure-docker "us-docker.pkg.dev" --quiet
 
-      - name: Ensure Artifact Registry repository exists
+      - name: Ensure runtime SA exists
         run: |
           set -euo pipefail
-          if ! gcloud artifacts repositories describe "${AR_REPO_NAME}" \
-            --location="${GCP_REGION}" \
+          RUNTIME_SA_EMAIL="dbt-rabbit-samples-runtime@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
+          if ! gcloud iam service-accounts describe "${RUNTIME_SA_EMAIL}" \
             --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
-            echo "Creating Artifact Registry repository ${AR_REPO_NAME}..."
-            gcloud artifacts repositories create "${AR_REPO_NAME}" \
-              --repository-format=docker \
-              --location="${GCP_REGION}" \
+            echo "Creating runtime SA ${RUNTIME_SA_EMAIL}..."
+            gcloud iam service-accounts create dbt-rabbit-samples-runtime \
               --project="${GCP_PROJECT_ID}" \
-              --description="dbt-rabbit-samples container images"
+              --display-name="dbt-rabbit-samples Cloud Run Job runtime"
           fi
+          gcloud projects add-iam-policy-binding "${GCP_PROJECT_ID}" \
+            --member="serviceAccount:${RUNTIME_SA_EMAIL}" \
+            --role="roles/bigquery.jobUser" --condition=None >/dev/null
+          gcloud projects add-iam-policy-binding "${GCP_PROJECT_ID}" \
+            --member="serviceAccount:${RUNTIME_SA_EMAIL}" \
+            --role="roles/bigquery.dataEditor" --condition=None >/dev/null
 
       - name: Build and push container image
         env:
-          IMAGE: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO_NAME }}/dbt-rabbit-samples:${{ steps.tag.outputs.tag }}
+          IMAGE: us-docker.pkg.dev/${{ env.GCP_REGISTRY_PROJECT_ID }}/images/dbt-rabbit-samples:${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
           docker build -t "${IMAGE}" .

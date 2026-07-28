@@ -52,6 +52,10 @@ jobs:
       GCP_DATASET: ${{ vars.GCP_DATASET || 'dbt_demo' }}
       GCP_LOCATION: ${{ vars.GCP_LOCATION || 'US' }}
       GCP_RUNTIME_SA: ${{ vars.GCP_RUNTIME_SA }}
+      # gcloud impersonates GCP_DEPLOY_SA via WIF; without this, gcloud
+      # quota-checks API calls against that SA's own home project
+      # (followrabbit-ai-public) instead of the project being operated on.
+      CLOUDSDK_BILLING_QUOTA_PROJECT: ${{ vars.GCP_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v6
         with:

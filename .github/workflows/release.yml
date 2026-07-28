@@ -78,6 +78,11 @@ jobs:
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SA }}
+          # Without this, the ADC quota project defaults to the deploy SA's
+          # home project (followrabbit-ai-public), which doesn't have every
+          # API this job calls enabled. Bill/quota-check against the actual
+          # working project instead.
+          project_id: ${{ vars.GCP_PROJECT_ID }}
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v3

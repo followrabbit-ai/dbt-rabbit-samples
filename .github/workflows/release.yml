@@ -113,6 +113,14 @@ jobs:
           gcloud projects add-iam-policy-binding "${GCP_PROJECT_ID}" \
             --member="serviceAccount:${RUNTIME_SA_EMAIL}" \
             --role="roles/bigquery.dataEditor" --condition=None >/dev/null
+          # Deploying a Cloud Run Job to run *as* RUNTIME_SA_EMAIL requires
+          # the deploying identity to be able to actAs it — a distinct
+          # permission from serviceAccountAdmin (create/manage SAs). Grant
+          # it narrowly on just this SA, not project-wide.
+          gcloud iam service-accounts add-iam-policy-binding "${RUNTIME_SA_EMAIL}" \
+            --project="${GCP_PROJECT_ID}" \
+            --member="serviceAccount:${{ vars.GCP_DEPLOY_SA }}" \
+            --role="roles/iam.serviceAccountUser" --condition=None >/dev/null
 
       - name: Build and push container image
         env:

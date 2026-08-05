@@ -24,6 +24,7 @@ Each pipeline loads a rolling 30-day window into staging, then aggregates to a d
    - `roles/bigquery.jobUser` (project level)
    - `roles/bigquery.dataEditor` on the target dataset
 6. **Public data access** — `roles/bigquery.dataViewer` on `bigquery-public-data` is granted by default.
+7. **Rabbit API key** — required by every target now that the profile uses the `rabbitbigquery` adapter. Generate one at [app.followrabbit.ai/api-keys](https://app.followrabbit.ai/api-keys); see [Rabbit Pricing Model Optimization](#rabbit-pricing-model-optimization) below.
 
 Create the base dataset (dbt creates `dbt_demo_staging` and `dbt_demo_marts` automatically on first run):
 
@@ -64,6 +65,7 @@ Set environment variables:
 export GCP_PROJECT=your-project-id
 export GCP_DATASET=dbt_demo      # optional, this is the default
 export GCP_LOCATION=US           # optional, this is the default
+export RABBIT_API_KEY=your-rabbit-api-key
 ```
 
 ### 3. Verify connection
@@ -110,6 +112,19 @@ CI linting uses a credential-free path: `dbt parse` then SQLFluff on source mode
 
 Unit tests mock upstream `source()` / `ref()` inputs so transform logic is verified without scanning public datasets.
 
+## Rabbit Pricing Model Optimization
+
+Every target (`dev` and `prod`) uses [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) (`type: rabbitbigquery` in `profiles.sample.yml` / `profiles.docker.yml`) — a drop-in replacement for `dbt-bigquery` that routes each query to whichever is cheaper, on-demand or slot-based/reservation pricing, with no SQL changes. It's a superset of the standard adapter: same `method: oauth` connection, same models, same tests, plus three extra profile keys (`rabbit_api_key`, `rabbit_default_pricing_mode`, and optionally `rabbit_reservation_ids`).
+
+**Setup:**
+1. Generate an API key at [app.followrabbit.ai/api-keys](https://app.followrabbit.ai/api-keys) for your tenant.
+2. Local dev: `export RABBIT_API_KEY=...` alongside the other env vars above.
+3. Prod (Cloud Run Job): store the key in Secret Manager (default secret name `rabbit-api-key` in `GCP_PROJECT_ID`) and grant `roles/secretmanager.secretAccessor` on it to the runtime SA. `release.yml` passes it into the container via `--set-secrets` — see [Required GitHub Variables](#required-github-variables).
+
+**Config:** `rabbit_default_pricing_mode: on_demand` matches this project's actual default billing (no BigQuery reservation is provisioned yet). `rabbit_reservation_ids` is left unset since there's no reservation to route to — confirmed locally that the adapter treats this as a required field for optimization to actually engage: with it empty, every job logs `RabbitBigQuery adapter: Rabbit optimization disabled: Missing required rabbit_reservation_ids` and dbt falls through to plain BigQuery behavior (verified via a full `dbt build`, 16/16 models/tests still pass, identical to the pre-Rabbit baseline). The adapter and profile are fully wired up; optimization itself switches on once a reservation exists and its ID is added to `rabbit_reservation_ids`. See the [adapter's README](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) for the full config reference (multiple/regional reservations, `rabbit_enabled` toggle, statement-level routing).
+
+**Verify it's working:** `dbt run --debug` and check `logs/dbt.log` for `RabbitBigQuery` lines, or view optimized jobs in the [Rabbit dashboard](https://app.followrabbit.ai/gcp/optimization/bigquery/automation?bq-automation-tab=DYNAMIC_PRICING).
+
 ## CI/CD
 
 Pull requests run lint/parse checks. Merges to `main` go through [release-please](https://github.com/googleapis/release-please); a new GitHub Release triggers deployment to a **Cloud Run Job** that runs `dbt build --target prod --exclude resource_type:unit_test` (models + schema tests; unit tests run locally only).
@@ -133,7 +148,7 @@ flowchart LR
 
 1. Every push to `main` runs release-please, which opens or updates a Release PR from [Conventional Commits](https://www.conventionalcommits.org/) (`feat:` → minor, `fix:` → patch, breaking change → major).
 2. Merging the Release PR creates a GitHub Release + tag and triggers the deploy job.
-3. The deploy job ensures the Cloud Run Job's runtime service account exists (creating it and granting BigQuery access on first run if needed), builds a container image, pushes it to the shared `followrabbit-ai-public/images` Artifact Registry repo (Terraform-managed, not per-project), and updates the Cloud Run Job. The image entrypoint is `dbt build --target prod --exclude resource_type:unit_test` so prod runs models and schema tests but not unit tests. **No schedule** — run the job manually when you want a build:
+3. The deploy job ensures the Cloud Run Job's runtime service account exists (creating it and granting BigQuery access on first run if needed), builds a container image, pushes it to the shared `followrabbit-ai-public/images` Artifact Registry repo (Terraform-managed, not per-project), and updates the Cloud Run Job — injecting the Rabbit API key from Secret Manager via `--set-secrets` (see [Rabbit Pricing Model Optimization](#rabbit-pricing-model-optimization)). The image entrypoint is `dbt build --target prod --exclude resource_type:unit_test` so prod runs models and schema tests but not unit tests. **No schedule** — run the job manually when you want a build:
 
 ```bash
 gcloud run jobs execute dbt-rabbit-samples \
@@ -156,6 +171,7 @@ Settings → Secrets and variables → Actions → Variables (and a `production`
 | `GCP_DATASET` | BigQuery dataset base name (optional) | `dbt_demo` |
 | `GCP_LOCATION` | BigQuery location (optional) | `US` |
 | `CLOUD_RUN_JOB_NAME` | Cloud Run Job name (optional) | `dbt-rabbit-samples` |
+| `RABBIT_SECRET_NAME` | Secret Manager secret name holding the Rabbit API key (optional) | `rabbit-api-key` |
 
 PR validation does **not** need these variables. Deploy runs only after a release (or manual workflow dispatch).
 
@@ -187,7 +203,7 @@ Phases 1–3 build a mature dbt repo (quality gates, deployment). Phase 4 demons
 1. **Phase 1 (complete)** — Generic dbt project with standard `dbt-bigquery` adapter
 2. **Phase 2 (complete)** — Tests and linting (local SQLFluff + expanded dbt schema and unit tests)
 3. **Phase 3 (complete)** — CI/CD and deployment via **Cloud Run Job**
-4. **Phase 4 (next)** — Rabbit Pricing Model Optimization via [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt)
+4. **Phase 4 (in progress)** — Rabbit Pricing Model Optimization via [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt)
 
 ## License
 

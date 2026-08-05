@@ -2,7 +2,7 @@ dbt_rabbit_samples:
   target: prod
   outputs:
     prod:
-      type: bigquery
+      type: rabbitbigquery
       method: oauth
       project: "{{ env_var('GCP_PROJECT') }}"
       dataset: "{{ env_var('GCP_DATASET', 'dbt_demo') }}"
@@ -10,3 +10,5 @@ dbt_rabbit_samples:
       threads: 4
       job_retries: 1
       timeout_seconds: 3600
+      rabbit_api_key: "{{ env_var('RABBIT_API_KEY') }}"
+      rabbit_default_pricing_mode: on_demand

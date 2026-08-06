@@ -17,7 +17,8 @@ dbt_rabbit_samples:
       job_retries: 1
       timeout_seconds: 300
       rabbit_api_key: "{{ env_var('RABBIT_API_KEY') }}"
-      rabbit_default_pricing_mode: on_demand
+      rabbit_default_pricing_mode: "{{ env_var('RABBIT_DEFAULT_PRICING_MODE', 'on_demand') }}"
+      rabbit_reservation_ids: "{{ env_var('RABBIT_RESERVATION_IDS', '') }}"
 
     prod:
       type: rabbitbigquery
@@ -29,4 +30,5 @@ dbt_rabbit_samples:
       job_retries: 1
       timeout_seconds: 3600
       rabbit_api_key: "{{ env_var('RABBIT_API_KEY') }}"
-      rabbit_default_pricing_mode: on_demand
+      rabbit_default_pricing_mode: "{{ env_var('RABBIT_DEFAULT_PRICING_MODE', 'on_demand') }}"
+      rabbit_reservation_ids: "{{ env_var('RABBIT_RESERVATION_IDS', '') }}"

@@ -121,11 +121,13 @@ Every target (`dev` and `prod`) uses [`dbt-rabbit-bigquery`](https://github.com/
 2. Local dev: `export RABBIT_API_KEY=...` alongside the other env vars above.
 3. Prod (Cloud Run Job): store the key in Secret Manager (default secret name `rabbit-api-key` in `GCP_PROJECT_ID`) and grant `roles/secretmanager.secretAccessor` on it to the runtime SA. `release.yml` passes it into the container via `--set-secrets` — see [Required GitHub Variables](#required-github-variables).
 
-**Config:** `rabbit_default_pricing_mode: on_demand` matches this project's actual default billing (no BigQuery reservation is provisioned yet). `rabbit_reservation_ids` is left unset since there's no reservation to route to — confirmed locally that the adapter treats this as a required field for optimization to actually engage: with it empty, every job logs `RabbitBigQuery adapter: Rabbit optimization disabled: Missing required rabbit_reservation_ids` and dbt falls through to plain BigQuery behavior (verified via a full `dbt build`, 16/16 models/tests still pass, identical to the pre-Rabbit baseline). The adapter and profile are fully wired up; optimization itself switches on once a reservation exists and its ID is added to `rabbit_reservation_ids`. See the [adapter's README](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) for the full config reference (multiple/regional reservations, `rabbit_enabled` toggle, statement-level routing).
+**Config:** `rabbit_default_pricing_mode` and `rabbit_reservation_ids` are set via `RABBIT_DEFAULT_PRICING_MODE` and `RABBIT_RESERVATION_IDS` env vars, same pattern as `GCP_DATASET`/`GCP_LOCATION` — default to `on_demand` and unset. With `rabbit_reservation_ids` empty, the adapter treats it as a required field for optimization to actually engage: every job logs `RabbitBigQuery adapter: Rabbit optimization disabled: Missing required rabbit_reservation_ids` and dbt falls through to plain BigQuery behavior (verified via a full `dbt build`, 16/16 models/tests still pass, identical to the pre-Rabbit baseline). Set `RABBIT_RESERVATION_IDS` to your reservation ID(s) (format `project:location.reservation-name`, comma-separated for multiple) to enable routing. See the [adapter's README](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) for the full config reference (multiple/regional reservations, `rabbit_enabled` toggle, statement-level routing).
 
 **Verify it's working:** `dbt run --debug` and check `logs/dbt.log` for `RabbitBigQuery` lines, or view optimized jobs in the [Rabbit dashboard](https://app.followrabbit.ai/gcp/optimization/bigquery/automation?bq-automation-tab=DYNAMIC_PRICING).
 
 ## CI/CD
+
+This is a reference architecture for deploying a scheduled dbt project on GCP — GitHub Actions, Workload Identity Federation, and a Cloud Run Job — meant to be adapted to your own project, CI provider, and deployment target. The specific service accounts, shared registry, and project IDs below are Rabbit's own internal demo setup, not meant to be reused directly.
 
 Pull requests run lint/parse checks. Merges to `main` go through [release-please](https://github.com/googleapis/release-please); a new GitHub Release triggers deployment to a **Cloud Run Job** that runs `dbt build --target prod --exclude resource_type:unit_test` (models + schema tests; unit tests run locally only).
 
@@ -172,6 +174,8 @@ Settings → Secrets and variables → Actions → Variables (and a `production`
 | `GCP_LOCATION` | BigQuery location (optional) | `US` |
 | `CLOUD_RUN_JOB_NAME` | Cloud Run Job name (optional) | `dbt-rabbit-samples` |
 | `RABBIT_SECRET_NAME` | Secret Manager secret name holding the Rabbit API key (optional) | `rabbit-api-key` |
+| `RABBIT_DEFAULT_PRICING_MODE` | Default Rabbit pricing mode — `on_demand` or `slot_based` (optional) | `on_demand` |
+| `RABBIT_RESERVATION_IDS` | BigQuery reservation ID(s) for Rabbit to route eligible jobs onto, comma-separated (optional) | `my-project:us.res1` |
 
 PR validation does **not** need these variables. Deploy runs only after a release (or manual workflow dispatch).
 

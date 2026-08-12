@@ -7,3 +7,4 @@ profiles.yml
 .user.yml
 dbt_internal_packages/
 rabbit-api-key.txt
+reservations.txt

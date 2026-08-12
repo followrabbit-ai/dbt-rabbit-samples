@@ -11,6 +11,38 @@ Two independent pipelines run against BigQuery public datasets:
 
 Each pipeline loads a rolling 30-day window into staging, then aggregates to a daily mart.
 
+## Rabbit Pricing Model Optimization
+
+Every target (`dev` and `prod`) uses [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) (`type: rabbitbigquery` in `profiles.sample.yml` / `profiles.docker.yml`) — a drop-in replacement for `dbt-bigquery` that routes each query to whichever is cheaper, on-demand or slot-based/reservation pricing, with no SQL changes. It's a superset of the standard adapter: same `method: oauth` connection, same models, same tests, plus three extra profile keys (`rabbit_api_key`, `rabbit_default_pricing_mode`, and optionally `rabbit_reservation_ids`).
+
+See [PR #16](https://github.com/followrabbit-ai/dbt-rabbit-samples/pull/16) for the full audit trail of this implementation — every file changed and why.
+
+**Setup:**
+1. Generate an API key at [app.followrabbit.ai/api-keys](https://app.followrabbit.ai/api-keys) for your tenant.
+2. Local dev: `export RABBIT_API_KEY=...` alongside `GCP_PROJECT`/`GCP_DATASET`/`GCP_LOCATION` (see [Setup](#setup) below).
+3. Prod (Cloud Run Job): store the key in Secret Manager (default secret name `rabbit-api-key` in `GCP_PROJECT_ID`) and grant `roles/secretmanager.secretAccessor` on it to the runtime SA. `release.yml` passes it into the container via `--set-secrets` — see [Required GitHub Variables](#required-github-variables).
+
+**Config:** `rabbit_default_pricing_mode` and `rabbit_reservation_ids` are set via `RABBIT_DEFAULT_PRICING_MODE` and `RABBIT_RESERVATION_IDS` env vars, same pattern as `GCP_DATASET`/`GCP_LOCATION` (see [Setup](#setup) below) — default to `on_demand` and unset. With `rabbit_reservation_ids` empty, the adapter treats it as a required field for optimization to actually engage: every job logs `RabbitBigQuery adapter: Rabbit optimization disabled: Missing required rabbit_reservation_ids` and dbt falls through to plain BigQuery behavior (verified via a full `dbt build`, 16/16 models/tests still pass, identical to the pre-Rabbit baseline). Set `RABBIT_RESERVATION_IDS` to your reservation ID(s) (format `project:location.reservation-name`, comma-separated for multiple) to enable routing. See the [adapter's README](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) for the full config reference (multiple/regional reservations, `rabbit_enabled` toggle, statement-level routing).
+
+**Verify it's working:** `dbt run --debug` and check `logs/dbt.log` for `RabbitBigQuery` lines, or view optimized jobs in the [Rabbit dashboard](https://app.followrabbit.ai/gcp/optimization/bigquery/automation?bq-automation-tab=DYNAMIC_PRICING).
+
+## Project layout
+
+```
+models/
+├── bikeshare/
+│   ├── staging/stg_bikeshare_trips.sql
+│   └── marts/mart_daily_rides.sql
+└── bitcoin_cash/
+    ├── staging/stg_bch_transactions.sql
+    └── marts/mart_daily_bch_transactions.sql
+```
+
+Models land in BigQuery under schema suffixes:
+
+- `{project}.dbt_demo_staging` — staging tables
+- `{project}.dbt_demo_marts` — mart tables
+
 ## Prerequisites
 
 1. **[uv](https://docs.astral.sh/uv/getting-started/installation/)** — Python package and environment manager
@@ -24,7 +56,7 @@ Each pipeline loads a rolling 30-day window into staging, then aggregates to a d
    - `roles/bigquery.jobUser` (project level)
    - `roles/bigquery.dataEditor` on the target dataset
 6. **Public data access** — `roles/bigquery.dataViewer` on `bigquery-public-data` is granted by default.
-7. **Rabbit API key** — required by every target now that the profile uses the `rabbitbigquery` adapter. Generate one at [app.followrabbit.ai/api-keys](https://app.followrabbit.ai/api-keys); see [Rabbit Pricing Model Optimization](#rabbit-pricing-model-optimization) below.
+7. **Rabbit API key** — required by every target now that the profile uses the `rabbitbigquery` adapter. Generate one at [app.followrabbit.ai/api-keys](https://app.followrabbit.ai/api-keys); see [Rabbit Pricing Model Optimization](#rabbit-pricing-model-optimization) above.
 
 Create the base dataset (dbt creates `dbt_demo_staging` and `dbt_demo_marts` automatically on first run):
 
@@ -112,19 +144,6 @@ CI linting uses a credential-free path: `dbt parse` then SQLFluff on source mode
 
 Unit tests mock upstream `source()` / `ref()` inputs so transform logic is verified without scanning public datasets.
 
-## Rabbit Pricing Model Optimization
-
-Every target (`dev` and `prod`) uses [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) (`type: rabbitbigquery` in `profiles.sample.yml` / `profiles.docker.yml`) — a drop-in replacement for `dbt-bigquery` that routes each query to whichever is cheaper, on-demand or slot-based/reservation pricing, with no SQL changes. It's a superset of the standard adapter: same `method: oauth` connection, same models, same tests, plus three extra profile keys (`rabbit_api_key`, `rabbit_default_pricing_mode`, and optionally `rabbit_reservation_ids`).
-
-**Setup:**
-1. Generate an API key at [app.followrabbit.ai/api-keys](https://app.followrabbit.ai/api-keys) for your tenant.
-2. Local dev: `export RABBIT_API_KEY=...` alongside the other env vars above.
-3. Prod (Cloud Run Job): store the key in Secret Manager (default secret name `rabbit-api-key` in `GCP_PROJECT_ID`) and grant `roles/secretmanager.secretAccessor` on it to the runtime SA. `release.yml` passes it into the container via `--set-secrets` — see [Required GitHub Variables](#required-github-variables).
-
-**Config:** `rabbit_default_pricing_mode` and `rabbit_reservation_ids` are set via `RABBIT_DEFAULT_PRICING_MODE` and `RABBIT_RESERVATION_IDS` env vars, same pattern as `GCP_DATASET`/`GCP_LOCATION` — default to `on_demand` and unset. With `rabbit_reservation_ids` empty, the adapter treats it as a required field for optimization to actually engage: every job logs `RabbitBigQuery adapter: Rabbit optimization disabled: Missing required rabbit_reservation_ids` and dbt falls through to plain BigQuery behavior (verified via a full `dbt build`, 16/16 models/tests still pass, identical to the pre-Rabbit baseline). Set `RABBIT_RESERVATION_IDS` to your reservation ID(s) (format `project:location.reservation-name`, comma-separated for multiple) to enable routing. See the [adapter's README](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) for the full config reference (multiple/regional reservations, `rabbit_enabled` toggle, statement-level routing).
-
-**Verify it's working:** `dbt run --debug` and check `logs/dbt.log` for `RabbitBigQuery` lines, or view optimized jobs in the [Rabbit dashboard](https://app.followrabbit.ai/gcp/optimization/bigquery/automation?bq-automation-tab=DYNAMIC_PRICING).
-
 ## CI/CD Reference Architecture
 
 Deploying a scheduled dbt project on GCP — GitHub Actions, Workload Identity Federation, and a Cloud Run Job — adapt this to your own project, CI provider, and deployment target. The specific service accounts, shared registry, and project IDs below are Rabbit's own internal demo setup, not meant to be reused directly.
@@ -182,23 +201,6 @@ PR validation does **not** need these variables. Deploy runs only after a releas
 Images are pushed to the shared, Terraform-managed `us-docker.pkg.dev/${GCP_REGISTRY_PROJECT_ID}/images/dbt-rabbit-samples` registry — not a per-project repo, and the deploy SA has no rights to create Artifact Registry repos (by design; see `dbt-rabbit-samples-pub` in the foundation repo). The deploy SA holds `roles/artifactregistry.writer` (scoped to that shared repo's `us` mirror), `roles/run.developer`, and `roles/iam.serviceAccountAdmin` + `roles/resourcemanager.projectIamAdmin` on `GCP_PROJECT_ID` — the latter two so the deploy job can create/manage the runtime SA itself, which is what the "Ensure runtime SA exists" step does. The runtime SA is granted `roles/bigquery.jobUser` and `roles/bigquery.dataEditor` at the project level.
 
 WIF pool/provider setup is provisioned outside this repo.
-
-## Project layout
-
-```
-models/
-├── bikeshare/
-│   ├── staging/stg_bikeshare_trips.sql
-│   └── marts/mart_daily_rides.sql
-└── bitcoin_cash/
-    ├── staging/stg_bch_transactions.sql
-    └── marts/mart_daily_bch_transactions.sql
-```
-
-Models land in BigQuery under schema suffixes:
-
-- `{project}.dbt_demo_staging` — staging tables
-- `{project}.dbt_demo_marts` — mart tables
 
 ## License
 

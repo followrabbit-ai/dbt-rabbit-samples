@@ -1,6 +1,6 @@
 # dbt-rabbit-samples
 
-Sample [dbt](https://www.getdbt.com/) project that mirrors the BigQuery ELT pipelines in [rabbit-sample-dags](https://github.com/followrabbit-ai/rabbit-sample-dags) using dbt models instead of Airflow DAGs.
+Sample [dbt](https://www.getdbt.com/) project with BigQuery ELT pipelines, used to demonstrate Rabbit Pricing Model Optimization.
 
 Two independent pipelines run against BigQuery public datasets:
 
@@ -9,7 +9,7 @@ Two independent pipelines run against BigQuery public datasets:
 | **Bikeshare** | `bigquery-public-data.austin_bikeshare.bikeshare_trips` | `stg_bikeshare_trips` | `mart_daily_rides` |
 | **Bitcoin Cash** | `bigquery-public-data.crypto_bitcoin_cash.transactions` | `stg_bch_transactions` | `mart_daily_bch_transactions` |
 
-Each pipeline loads a rolling 30-day window into staging, then aggregates to a daily mart. The Airflow demos also export marts to GCS as Parquet — that step is out of scope for this repo; the focus is dbt modeling and Rabbit Pricing Model Optimization.
+Each pipeline loads a rolling 30-day window into staging, then aggregates to a daily mart.
 
 ## Prerequisites
 
@@ -125,9 +125,9 @@ Every target (`dev` and `prod`) uses [`dbt-rabbit-bigquery`](https://github.com/
 
 **Verify it's working:** `dbt run --debug` and check `logs/dbt.log` for `RabbitBigQuery` lines, or view optimized jobs in the [Rabbit dashboard](https://app.followrabbit.ai/gcp/optimization/bigquery/automation?bq-automation-tab=DYNAMIC_PRICING).
 
-## CI/CD
+## CI/CD Reference Architecture
 
-This is a reference architecture for deploying a scheduled dbt project on GCP — GitHub Actions, Workload Identity Federation, and a Cloud Run Job — meant to be adapted to your own project, CI provider, and deployment target. The specific service accounts, shared registry, and project IDs below are Rabbit's own internal demo setup, not meant to be reused directly.
+Deploying a scheduled dbt project on GCP — GitHub Actions, Workload Identity Federation, and a Cloud Run Job — adapt this to your own project, CI provider, and deployment target. The specific service accounts, shared registry, and project IDs below are Rabbit's own internal demo setup, not meant to be reused directly.
 
 Pull requests run lint/parse checks. Merges to `main` go through [release-please](https://github.com/googleapis/release-please); a new GitHub Release triggers deployment to a **Cloud Run Job** that runs `dbt build --target prod --exclude resource_type:unit_test` (models + schema tests; unit tests run locally only).
 
@@ -181,7 +181,7 @@ PR validation does **not** need these variables. Deploy runs only after a releas
 
 Images are pushed to the shared, Terraform-managed `us-docker.pkg.dev/${GCP_REGISTRY_PROJECT_ID}/images/dbt-rabbit-samples` registry — not a per-project repo, and the deploy SA has no rights to create Artifact Registry repos (by design; see `dbt-rabbit-samples-pub` in the foundation repo). The deploy SA holds `roles/artifactregistry.writer` (scoped to that shared repo's `us` mirror), `roles/run.developer`, and `roles/iam.serviceAccountAdmin` + `roles/resourcemanager.projectIamAdmin` on `GCP_PROJECT_ID` — the latter two so the deploy job can create/manage the runtime SA itself, which is what the "Ensure runtime SA exists" step does. The runtime SA is granted `roles/bigquery.jobUser` and `roles/bigquery.dataEditor` at the project level.
 
-WIF pool/provider setup is provisioned outside this repo (same pattern as [rabbit-sample-dags](https://github.com/followrabbit-ai/rabbit-sample-dags)).
+WIF pool/provider setup is provisioned outside this repo.
 
 ## Project layout
 
@@ -199,15 +199,6 @@ Models land in BigQuery under schema suffixes:
 
 - `{project}.dbt_demo_staging` — staging tables
 - `{project}.dbt_demo_marts` — mart tables
-
-## Roadmap
-
-Phases 1–3 build a mature dbt repo (quality gates, deployment). Phase 4 demonstrates Rabbit Pricing Model Optimization as a minimal add-on to an existing project.
-
-1. **Phase 1 (complete)** — Generic dbt project with standard `dbt-bigquery` adapter
-2. **Phase 2 (complete)** — Tests and linting (local SQLFluff + expanded dbt schema and unit tests)
-3. **Phase 3 (complete)** — CI/CD and deployment via **Cloud Run Job**
-4. **Phase 4 (in progress)** — Rabbit Pricing Model Optimization via [`dbt-rabbit-bigquery`](https://github.com/followrabbit-ai/bq-job-optimizer-dbt)
 
 ## License
 

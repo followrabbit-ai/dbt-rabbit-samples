@@ -45,7 +45,7 @@ jobs:
             target: dev
             outputs:
               dev:
-                type: bigquery
+                type: rabbitbigquery
                 method: oauth
                 project: "{{ env_var('GCP_PROJECT') }}"
                 dataset: "{{ env_var('GCP_DATASET', 'dbt_demo') }}"

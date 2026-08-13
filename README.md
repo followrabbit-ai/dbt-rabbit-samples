@@ -17,14 +17,16 @@ Every target (`dev` and `prod`) uses [`dbt-rabbit-bigquery`](https://github.com/
 
 See [PR #16](https://github.com/followrabbit-ai/dbt-rabbit-samples/pull/16) for the full audit trail of this implementation — every file changed and why.
 
-**Setup:**
+### Config Steps
 1. Generate an API key at [app.followrabbit.ai/api-keys](https://app.followrabbit.ai/api-keys) for your tenant.
 2. Local dev: `export RABBIT_API_KEY=...` alongside `GCP_PROJECT`/`GCP_DATASET`/`GCP_LOCATION` (see [Setup](#setup) below).
 3. Prod (Cloud Run Job): store the key in Secret Manager (default secret name `rabbit-api-key` in `GCP_PROJECT_ID`) and grant `roles/secretmanager.secretAccessor` on it to the runtime SA. `release.yml` passes it into the container via `--set-secrets` — see [Required GitHub Variables](#required-github-variables).
 
-**Config:** `rabbit_default_pricing_mode` and `rabbit_reservation_ids` are set via `RABBIT_DEFAULT_PRICING_MODE` and `RABBIT_RESERVATION_IDS` env vars, same pattern as `GCP_DATASET`/`GCP_LOCATION` (see [Setup](#setup) below) — default to `on_demand` and unset. With `rabbit_reservation_ids` empty, the adapter treats it as a required field for optimization to actually engage: every job logs `RabbitBigQuery adapter: Rabbit optimization disabled: Missing required rabbit_reservation_ids` and dbt falls through to plain BigQuery behavior (verified via a full `dbt build`, 16/16 models/tests still pass, identical to the pre-Rabbit baseline). Set `RABBIT_RESERVATION_IDS` to your reservation ID(s) (format `project:location.reservation-name`, comma-separated for multiple) to enable routing. See the [adapter's README](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) for the full config reference (multiple/regional reservations, `rabbit_enabled` toggle, statement-level routing).
+### Config
+`rabbit_default_pricing_mode` and `rabbit_reservation_ids` are set via `RABBIT_DEFAULT_PRICING_MODE` and `RABBIT_RESERVATION_IDS` env vars, same pattern as `GCP_DATASET`/`GCP_LOCATION` (see [Setup](#setup) below) — default to `on_demand` and unset. With `rabbit_reservation_ids` empty, the adapter treats it as a required field for optimization to actually engage: every job logs `RabbitBigQuery adapter: Rabbit optimization disabled: Missing required rabbit_reservation_ids` and dbt falls through to plain BigQuery behavior (verified via a full `dbt build`, 16/16 models/tests still pass, identical to the pre-Rabbit baseline). Set `RABBIT_RESERVATION_IDS` to your reservation ID(s) (format `project:location.reservation-name`, comma-separated for multiple) to enable routing. See the [adapter's README](https://github.com/followrabbit-ai/bq-job-optimizer-dbt) for the full config reference (multiple/regional reservations, `rabbit_enabled` toggle, statement-level routing).
 
-**Verify it's working:** `dbt run --debug` and check `logs/dbt.log` for `RabbitBigQuery` lines, or view optimized jobs in the [Rabbit dashboard](https://app.followrabbit.ai/gcp/optimization/bigquery/automation?bq-automation-tab=DYNAMIC_PRICING).
+### Verification
+`dbt run --debug` and check `logs/dbt.log` for `RabbitBigQuery` lines, or view optimized jobs in the [Rabbit dashboard](https://app.followrabbit.ai/gcp/optimization/bigquery/automation?bq-automation-tab=DYNAMIC_PRICING).
 
 ## Project layout
 
@@ -146,9 +148,10 @@ Unit tests mock upstream `source()` / `ref()` inputs so transform logic is verif
 
 ## CI/CD Reference Architecture
 
-Deploying a scheduled dbt project on GCP — GitHub Actions, Workload Identity Federation, and a Cloud Run Job — adapt this to your own project, CI provider, and deployment target. The specific service accounts, shared registry, and project IDs below are Rabbit's own internal demo setup, not meant to be reused directly.
+This repository contains a reference architecture using GitHub Actions, Workload Identity Federation, and Cloud Run for deploying dbt workloads to the Google Cloud.
+Of course, your CI/CD may look very different, but you can adapt the concepts here for productionizing Pricing Model Optimization.
 
-Pull requests run lint/parse checks. Merges to `main` go through [release-please](https://github.com/googleapis/release-please); a new GitHub Release triggers deployment to a **Cloud Run Job** that runs `dbt build --target prod --exclude resource_type:unit_test` (models + schema tests; unit tests run locally only).
+Pull requests run lint and parse checks. Merges to `main` go through [release-please](https://github.com/googleapis/release-please); a new GitHub Release triggers deployment to a **Cloud Run Job**.
 
 ```mermaid
 flowchart LR
@@ -169,7 +172,7 @@ flowchart LR
 
 1. Every push to `main` runs release-please, which opens or updates a Release PR from [Conventional Commits](https://www.conventionalcommits.org/) (`feat:` → minor, `fix:` → patch, breaking change → major).
 2. Merging the Release PR creates a GitHub Release + tag and triggers the deploy job.
-3. The deploy job ensures the Cloud Run Job's runtime service account exists (creating it and granting BigQuery access on first run if needed), builds a container image, pushes it to the shared `followrabbit-ai-public/images` Artifact Registry repo (Terraform-managed, not per-project), and updates the Cloud Run Job — injecting the Rabbit API key from Secret Manager via `--set-secrets` (see [Rabbit Pricing Model Optimization](#rabbit-pricing-model-optimization)). The image entrypoint is `dbt build --target prod --exclude resource_type:unit_test` so prod runs models and schema tests but not unit tests. **No schedule** — run the job manually when you want a build:
+3. The deploy job ensures the Cloud Run Job's runtime service account exists (creating it and granting BigQuery access on first run if needed), builds a container image, pushes it to the shared `followrabbit-ai-public/images` Artifact Registry repo, and updates the Cloud Run Job — injecting the Rabbit API key from Secret Manager via `--set-secrets` (see [Rabbit Pricing Model Optimization](#rabbit-pricing-model-optimization)). The image entrypoint is `dbt build --target prod --exclude resource_type:unit_test` so prod runs models and schema tests but not unit tests. **No schedule** — run the job manually when you want a build:
 
 ```bash
 gcloud run jobs execute dbt-rabbit-samples \
@@ -197,8 +200,6 @@ Settings → Secrets and variables → Actions → Variables (and a `production`
 | `RABBIT_RESERVATION_IDS` | BigQuery reservation ID(s) for Rabbit to route eligible jobs onto, comma-separated (optional) | `my-project:us.res1` |
 
 PR validation does **not** need these variables. Deploy runs only after a release (or manual workflow dispatch).
-
-Images are pushed to the shared, Terraform-managed `us-docker.pkg.dev/${GCP_REGISTRY_PROJECT_ID}/images/dbt-rabbit-samples` registry — not a per-project repo, and the deploy SA has no rights to create Artifact Registry repos (by design; see `dbt-rabbit-samples-pub` in the foundation repo). The deploy SA holds `roles/artifactregistry.writer` (scoped to that shared repo's `us` mirror), `roles/run.developer`, and `roles/iam.serviceAccountAdmin` + `roles/resourcemanager.projectIamAdmin` on `GCP_PROJECT_ID` — the latter two so the deploy job can create/manage the runtime SA itself, which is what the "Ensure runtime SA exists" step does. The runtime SA is granted `roles/bigquery.jobUser` and `roles/bigquery.dataEditor` at the project level.
 
 WIF pool/provider setup is provisioned outside this repo.
 

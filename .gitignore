@@ -8,3 +8,4 @@ profiles.yml
 dbt_internal_packages/
 rabbit-api-key.txt
 reservations.txt
+demo/00_env.sh

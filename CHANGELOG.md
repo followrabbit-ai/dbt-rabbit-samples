@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/followrabbit-ai/dbt-rabbit-samples/compare/dbt-rabbit-samples-v0.3.0...dbt-rabbit-samples-v0.3.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* bump sqlfluff/sqlfluff-templater-dbt past DoS CVEs ([#18](https://github.com/followrabbit-ai/dbt-rabbit-samples/issues/18)) ([c8dfd25](https://github.com/followrabbit-ai/dbt-rabbit-samples/commit/c8dfd2537d1b5c72c79e75e407ca1b5be77fb5f4))
+
 ## [0.3.0](https://github.com/followrabbit-ai/dbt-rabbit-samples/compare/dbt-rabbit-samples-v0.2.0...dbt-rabbit-samples-v0.3.0) (2026-08-12)
 
 
